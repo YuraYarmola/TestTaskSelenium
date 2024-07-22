@@ -26,95 +26,124 @@ class LATimesScraper:
         self.base_url = "https://www.latimes.com/"
         self.results = []
 
-    def search_news(self):
+    def open_search_page(self):
         self.driver.get(self.base_url)
-        self.driver.find_element(By.XPATH, '//button[@data-element="search-button"]').click()
-        time.sleep(1)
-        search_box = self.driver.find_element(By.XPATH, "//input[@data-element='search-form-input']")
+        search_button = WebDriverWait(self.driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, '//button[@data-element="search-button"]'))
+        )
+        search_button.click()
+
+    def enter_search_phrase(self):
+        search_box = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//input[@data-element='search-form-input']"))
+        )
         search_box.send_keys(self.config["search_phrase"])
         search_box.send_keys(Keys.RETURN)
-        time.sleep(1)
 
     def filter_news_by_category(self):
         if self.config["news_category"]:
             try:
-                self.driver.find_element(By.XPATH, '//button[@class="button filters-open-button"]').click()
-                time.sleep(0.5)
-                self.driver.find_element(By.XPATH, '//button[@class="button see-all-button"]').click()
-                time.sleep(0.5)
+                filters_button = WebDriverWait(self.driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, '//button[@class="button filters-open-button"]'))
+                )
+                filters_button.click()
+
+                see_all_button = WebDriverWait(self.driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, '//button[@class="button see-all-button"]'))
+                )
+                see_all_button.click()
+
                 for category_name in self.config["news_category"]:
                     try:
-                        category_filter = self.driver.find_element(By.XPATH,  f"//label[contains(., '{category_name}')]")
+                        category_filter = WebDriverWait(self.driver, 10).until(
+                            EC.element_to_be_clickable((By.XPATH, f"//label[contains(., '{category_name}')]"))
+                        )
                         category_filter.find_element(By.TAG_NAME, "input").click()
                     except Exception as e:
                         logging.error(f"Category filter error for category: {category_name} -  {e}")
 
-                self.driver.find_element(By.XPATH, "//button[@class='button apply-button']").click()
-                time.sleep(10)
+                apply_button = WebDriverWait(self.driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[@class='button apply-button']"))
+                )
+                apply_button.click()
+                time.sleep(2)
             except Exception as e:
-                print(f"Category filter error: {e}")
+                logging.error(f"Category filter error: {e}")
 
     def sort_by(self, sort_by="Newest"):
-        select_element = self.driver.find_element(By.XPATH, "//select[@class='select-input']")
+        select_element = WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, "//select[@class='select-input']"))
+        )
         select = Select(select_element)
         select.select_by_visible_text(sort_by)
+        time.sleep(2)
+
+    def download_image(self, media_url, download_folder):
+        response = requests.get(media_url)
+        media_content = response.content
+        media_hash = hashlib.sha256(media_content).hexdigest()
+        media_filename = os.path.join(download_folder, f"{media_hash}.jpg")
+        with open(media_filename, 'wb') as file:
+            file.write(media_content)
+        return media_filename
+
+    def process_article(self, article, date_limit, download_folder):
+        try:
+            title = article.find_element(By.XPATH, ".//h3[@class='promo-title']").text
+            description = article.find_element(By.XPATH, ".//p[@class='promo-description']").text
+            timestamp = article.find_element(By.XPATH, ".//p[@class='promo-timestamp']").get_attribute("data-timestamp")
+            media_url = article.find_element(By.XPATH, ".//div[@class='promo-media']//img[@class='image']").get_attribute("src")
+
+            article_date = datetime.fromtimestamp(int(timestamp) / 1000)
+
+            if article_date < date_limit:
+                return False
+
+            media_filename = self.download_image(media_url, download_folder)
+
+            self.results.append({
+                "title": title,
+                "date": article_date.strftime('%Y-%m-%d'),
+                "description": description,
+                "image_filename": media_filename,
+                "count_of_search_phrases": title.lower().count(self.config["search_phrase"].lower()) +
+                                           description.lower().count(self.config["search_phrase"].lower()),
+                "contains_money": bool(re.search(r'\$\d+(\.\d{2})?|(\d+ )?dollars|USD', title + ' ' + description))
+            })
+            return True
+        except Exception as e:
+            logging.error(f"Error processing article: {e}")
+            return True
 
     def get_news_within_months(self):
         months = self.config["months"]
         date_limit = datetime.now() - timedelta(days=30 * months)
         download_folder = self.config["download_folder"]
 
-        # Create the download folder if it doesn't exist
         if not os.path.exists(download_folder):
             os.makedirs(download_folder)
+
         continue_search = True
         while continue_search:
-            article_menu = self.driver.find_element(By.XPATH, "//ul[@class='search-results-module-results-menu']")
-            articles = article_menu.find_elements(By.XPATH, "./li")
+            try:
+                article_menu = WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, "//ul[@class='search-results-module-results-menu']"))
+                )
+                articles = article_menu.find_elements(By.XPATH, "./li")
 
-            for article in articles:
-                try:
-                    title = article.find_element(By.XPATH, ".//h3[@class='promo-title']").text
-                    description = article.find_element(By.XPATH, ".//p[@class='promo-description']").text
-                    timestamp = article.find_element(By.XPATH, ".//p[@class='promo-timestamp']").get_attribute(
-                        "data-timestamp")
-                    media_url = article.find_element(By.XPATH, ".//div[@class='promo-media']").find_element(By.XPATH,
-                                                                                                            ".//img[@class='image']").get_attribute(
-                        "src")
-
-                    article_date = datetime.fromtimestamp(int(timestamp) / 1000)
-
-                    if article_date < date_limit:
-                        continue_search = False
+                for article in articles:
+                    continue_search = self.process_article(article, date_limit, download_folder)
+                    if not continue_search:
                         break
-                    response = requests.get(media_url)
-                    media_content = response.content
-                    media_hash = hashlib.sha256(media_content).hexdigest()
-                    media_filename = os.path.join(download_folder, f"{media_hash}.jpg")
-                    with open(media_filename, 'wb') as file:
-                        file.write(media_content)
 
-                    self.results.append({
-                        "title": title,
-                        "date": article_date.strftime('%Y-%m-%d'),
-                        "description": description,
-                        "image_filename": media_filename,
-                        "count_of_search_phrases": title.lower().count(
-                            self.config["search_phrase"].lower()) + description.lower().count(
-                            self.config["search_phrase"].lower()),
-                        "contains_money": bool(
-                            re.search(r'\$\d+(\.\d{2})?|(\d+ )?dollars|USD', title + ' ' + description))
-                    })
-
-                except Exception as e:
-                    logging.error(f"Error processing article: {e}")
-
-            if continue_search:
-                next_page = self.driver.find_element(
-                    By.XPATH, "//div[@class='search-results-module-next-page']").find_element(By.XPATH,
-                                                                                                ".//a").get_attribute(
-                    "href")
-                self.driver.get(next_page)
+                if continue_search:
+                    next_page = WebDriverWait(self.driver, 10).until(
+                        EC.element_to_be_clickable((By.XPATH, "//div[@class='search-results-module-next-page']//a"))
+                    )
+                    self.driver.get(next_page.get_attribute("href"))
+            except Exception as e:
+                logging.error(f"Error during pagination or article processing: {e}")
+                continue_search = False
 
     def save_to_excel(self):
         df = pd.DataFrame(self.results)
@@ -128,7 +157,8 @@ if __name__ == "__main__":
     config_path = "config.json"
     scraper = LATimesScraper(config_path)
     try:
-        scraper.search_news()
+        scraper.open_search_page()
+        scraper.enter_search_phrase()
         scraper.filter_news_by_category()
         scraper.sort_by()
         scraper.get_news_within_months()
