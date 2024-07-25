@@ -1,0 +1,3 @@
+tasks:
+  Run all my tasks:
+    shell: python -m robocorp.tasks run tasks.py

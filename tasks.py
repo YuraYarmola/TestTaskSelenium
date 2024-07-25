@@ -147,7 +147,7 @@ class LATimesScraper:
 
     def save_to_excel(self):
         df = pd.DataFrame(self.results)
-        df.to_excel('news_results.xlsx', index=False)
+        df.to_excel('output/news_results.xlsx', index=False)
 
     def close(self):
         self.driver.quit()
