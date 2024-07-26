@@ -8,9 +8,8 @@ dependencies:
   # https://anaconda.org/search
   - python=3.11
 
-  - pip=20.2.1
+  - pip=24.1.2
   - pip:
     # Define pip packages here.
     # https://pypi.org/
     - rpaframework==28.6.1 # https://rpaframework.org/releasenotes.html
-    - robocorp==2.1.0
