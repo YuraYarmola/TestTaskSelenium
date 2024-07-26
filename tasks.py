@@ -17,6 +17,9 @@ import requests
 import traceback
 import os
 
+from robocorp.tasks import task
+from robocorp.tasks import get_output_dir
+from RPA.Browser.Selenium import Selenium
 
 class LATimesScraper:
     def __init__(self, config_path):
