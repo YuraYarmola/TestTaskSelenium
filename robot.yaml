@@ -2,10 +2,11 @@
 #  Run all my tasks:
 #    shell: python -m robocorp.tasks run try_robocorp.py
 #
-
+#
 tasks:
   Default:
-    shell: python -m robocorp.tasks run try_robocorp.py
+    actions:
+      - Run the main task
 
 condaConfigFile: conda.yaml
 artifactsDir: output
