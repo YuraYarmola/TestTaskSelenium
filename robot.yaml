@@ -5,7 +5,7 @@
 #
 tasks:
   Default:
-    shell: python try_robocorp.py
+    shell: python -m robocorp.tasks run try_robocorp.py
 
 condaConfigFile: conda.yaml
 artifactsDir: output
